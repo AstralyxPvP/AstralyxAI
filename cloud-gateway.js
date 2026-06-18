@@ -1,7 +1,7 @@
 /**
  * AstralyxPvP Discord AI Gateway Bridge - Cloudflare Worker Edition
  * Maintains a persistent WebSocket connection to the Discord Gateway,
- * and streams real-time console logs directly to a web-based dashboard.
+ * and streams real-time console logs securely using isolated context polling.
  */
 
 // Configuration Map of snowflake IDs to clean role tags
@@ -30,21 +30,47 @@ const ROLE_MAP = [
 
 const DEVELOPER_USER_ID = "1513925512118931551";
 
-// In-memory array of active streaming log listeners
-const activeLogStreams = [];
+// Global, isolated logging buffer
+const logsBuffer = [];
+const MAX_LOGS_LIMIT = 100;
+
+// Tracking global lifecycle contexts
+let globalCtx = null;
+let globalWebSocket = null;
+let heartbeatInterval = null;
+let sequenceNumber = null;
+let sessionId = null;
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    globalCtx = ctx; // Cache active context safely
 
-    // Endpoint to stream raw logs back to our browser terminal via SSE
+    // Endpoint to stream raw logs back to our browser terminal safely
     if (url.pathname === "/connect/stream") {
+      let intervalId = null;
+
       const stream = new ReadableStream({
         start(controller) {
-          activeLogStreams.push(controller);
-          
-          // Instantly send confirmation and trigger the connection
           broadcastLog("🚀 [Gateway System] Log streaming channel opened successfully.");
+          
+          // Poll the global logs buffer inside the context of the CURRENT request
+          let lastSeenIndex = 0;
+          
+          intervalId = setInterval(() => {
+            while (lastSeenIndex < logsBuffer.length) {
+              const log = logsBuffer[lastSeenIndex++];
+              try {
+                controller.enqueue(new TextEncoder().encode(`data: ${log}\n\n`));
+              } catch (err) {
+                // Client closed stream connection
+                clearInterval(intervalId);
+                break;
+              }
+            }
+          }, 400);
+
+          // Force background check and connection trigger on stream load
           ctx.waitUntil(
             establishDiscordConnection(env, ctx).catch(err => {
               broadcastLog(`❌ [Connection Error] ${err.message}`);
@@ -52,8 +78,7 @@ export default {
           );
         },
         cancel() {
-          const idx = activeLogStreams.indexOf(this);
-          if (idx !== -1) activeLogStreams.splice(idx, 1);
+          if (intervalId) clearInterval(intervalId);
           console.log("🔌 Live stream client closed.");
         }
       });
@@ -80,36 +105,26 @@ export default {
 
   // Keep gateway active in background with cron checks
   async scheduled(event, env, ctx) {
+    globalCtx = ctx;
     broadcastLog("⏰ [Cron Trigger] Running periodic connection validation check...");
     ctx.waitUntil(establishDiscordConnection(env, ctx));
   }
 };
 
 /**
- * Broadcasts logs to both standard Wrangler logs and any active browser terminal tabs
+ * Appends messages safely to the global queue
  */
 function broadcastLog(message) {
   const timestamp = new Date().toLocaleTimeString();
   const formattedLog = `[${timestamp}] ${message}`;
   
-  // Standard Cloudflare console log
   console.log(formattedLog);
 
-  // Broadcast to all active browser SSE streams
-  for (let i = activeLogStreams.length - 1; i >= 0; i--) {
-    const controller = activeLogStreams[i];
-    try {
-      controller.enqueue(new TextEncoder().encode(`data: ${formattedLog}\n\n`));
-    } catch (err) {
-      activeLogStreams.splice(i, 1); // Clean up dead client
-    }
+  logsBuffer.push(formattedLog);
+  if (logsBuffer.length > MAX_LOGS_LIMIT) {
+    logsBuffer.shift(); // Evict oldest log line
   }
 }
-
-let globalWebSocket = null;
-let heartbeatInterval = null;
-let sequenceNumber = null;
-let sessionId = null;
 
 async function establishDiscordConnection(env, ctx) {
   if (globalWebSocket && globalWebSocket.readyState === 1) {
@@ -135,7 +150,7 @@ async function establishDiscordConnection(env, ctx) {
 
   globalWebSocket = ws;
 
-  ws.addEventListener("message", async (event) => {
+  ws.addEventListener("message", (event) => {
     try {
       const payload = JSON.parse(event.data);
       const { op, d, s, t } = payload;
@@ -158,7 +173,12 @@ async function establishDiscordConnection(env, ctx) {
             sessionId = d.session_id;
             broadcastLog(`🤖 [Success] Discord validated gateway. Bot is online!`);
           } else if (t === "MESSAGE_CREATE") {
-            ctx.waitUntil(handleMessageCreate(d, env, d.user.id));
+            // Safely execute handleMessageCreate using active context
+            if (globalCtx && globalCtx.waitUntil) {
+              globalCtx.waitUntil(handleMessageCreate(d, env, d.user.id));
+            } else {
+              handleMessageCreate(d, env, d.user.id);
+            }
           }
           break;
 
