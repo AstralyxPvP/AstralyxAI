@@ -1,11 +1,10 @@
 /**
- * AstralyxPvP Discord AI Bot - Premium Serverless Implementation
- * Handles signatures, deferred executions, KV state history, and resilient Gemini integration.
+ * AstralyxPvP Discord AI Bot - Self-Healing, Fully Logged Worker
+ * Added support for a lightweight Gateway Bridge connection via a Shared Secret.
  */
 
 import { verifyKey } from 'discord-interactions';
 
-// Configuration Defaults
 const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
 const DEFAULT_SYSTEM_PROMPT = `You are the official AI mascot for AstralyxPvP, a competitive Minecraft PvP server. 
 You are friendly, competitive, and highly knowledgeable about Minecraft PvP mechanics including:
@@ -15,69 +14,168 @@ You are friendly, competitive, and highly knowledgeable about Minecraft PvP mech
 
 Keep your responses clear, natural, and formatted nicely with Discord Markdown. Avoid robotic introductions. Help players with PvP advice, server info, and strategies!`;
 
-// Simple in-memory rate limiter for the current Worker instance
 const localRateLimits = new Map();
-const RATE_LIMIT_COOLDOWN_MS = 4000; // 4 seconds between AI requests per user
+const RATE_LIMIT_COOLDOWN_MS = 4000;
 
 export default {
   async fetch(request, env, ctx) {
     try {
-      // 1. Only accept POST requests
       if (request.method !== 'POST') {
         return jsonResponse({ status: 'ok', message: 'Astralyx PvP Bot is running online' }, 200);
       }
 
-      // 2. Extract and validate Discord cryptographic signature headers
+      // Check if this is a secure forward from our Gateway Bridge
+      const authHeader = request.headers.get('authorization');
+      const gatewaySecret = env.GATEWAY_SECRET;
+
+      if (gatewaySecret && authHeader === `Bearer ${gatewaySecret}`) {
+        console.log("🔗 Connection: Authenticated Gateway Bridge request received.");
+        return await handleGatewayForward(request, env);
+      }
+
+      // Fallback to standard Discord signature validation for Webhook Interactions
       const signature = request.headers.get('x-signature-ed25519');
       const timestamp = request.headers.get('x-signature-timestamp');
       const rawBody = await request.text();
 
       if (!signature || !timestamp) {
-        return jsonResponse({ error: 'Missing security credentials' }, 401);
+        console.warn("⚠️ Warning: Request received missing signature headers.");
+        return jsonResponse({ error: 'Missing credentials' }, 401);
       }
 
-      // 3. Verify authenticity of the Discord request
-      const isValid = await verifyKey(
-        rawBody,
-        signature,
-        timestamp,
-        env.DISCORD_PUBLIC_KEY
-      );
-
+      const isValid = await verifyKey(rawBody, signature, timestamp, env.DISCORD_PUBLIC_KEY);
       if (!isValid) {
+        console.warn("⚠️ Warning: Invalid Discord signature verification attempt.");
         return jsonResponse({ error: 'Signature validation failed' }, 401);
       }
 
       const interaction = JSON.parse(rawBody);
 
-      // 4. Handle Discord Ping/Pong handshakes
-      if (interaction.type === 1) { // InteractionType.PING
-        return jsonResponse({ type: 1 }); // InteractionResponseType.PONG
+      if (interaction.type === 1) { // PING
+        console.log("ℹ️ Info: Responding to Discord PING handshakes.");
+        return jsonResponse({ type: 1 });
       }
 
-      // 5. Route Application Commands (Slash Commands)
-      if (interaction.type === 2) { // InteractionType.APPLICATION_COMMAND
-        return await handleSlashCommand(interaction, env, ctx);
+      if (interaction.type === 2) { // APPLICATION_COMMAND
+        return await handleApplicationCommand(interaction, env, ctx);
       }
 
       return jsonResponse({ error: 'Unsupported interaction type' }, 400);
     } catch (error) {
-      console.error('Fatal error processing worker request:', error);
+      console.error('❌ Fatal error in Fetch handler:', error);
       return jsonResponse({ error: 'Internal server error' }, 500);
     }
   }
 };
 
 /**
- * Main Slash Command router
+ * Handles incoming ping/mention payloads forwarded from the external Gateway Bridge
  */
-async function handleSlashCommand(interaction, env, ctx) {
-  const { name, options } = interaction.data;
+async function handleGatewayForward(request, env) {
+  try {
+    const payload = await request.json();
+    const { prompt, channelId, userId, username } = payload;
+
+    if (!prompt || !channelId || !userId) {
+      return jsonResponse({ error: 'Bad Request: Missing parameters' }, 400);
+    }
+
+    console.log(`📡 [Gateway Forward] Prompt: "${prompt}" from user ${username} (${userId})`);
+
+    // Check Ban Status
+    let isBanned = false;
+    if (env.CHAT_HISTORY) {
+      isBanned = await env.CHAT_HISTORY.get(`banned:${userId}`);
+    }
+    if (isBanned) {
+      return jsonResponse({ response: "❌ You are currently restricted from interacting with the AI on this server." });
+    }
+
+    // Rate limiting check
+    const now = Date.now();
+    const lastRequest = localRateLimits.get(userId) || 0;
+    if (now - lastRequest < RATE_LIMIT_COOLDOWN_MS) {
+      return jsonResponse({ response: "⏳ Slow down! Please wait a few seconds before asking again." });
+    }
+    localRateLimits.set(userId, now);
+
+    // Retrieve past channel history
+    let conversationHistory = [];
+    if (env.CHAT_HISTORY) {
+      const historyKey = `history:${channelId}`;
+      const savedHistory = await env.CHAT_HISTORY.get(historyKey);
+      if (savedHistory) {
+        try {
+          conversationHistory = JSON.parse(savedHistory);
+        } catch (e) {
+          conversationHistory = [];
+        }
+      }
+    }
+
+    // Append new message formatted nicely
+    const cleanPrompt = `User ${username} says: "${prompt}"`;
+    conversationHistory.push({ role: 'user', parts: [{ text: cleanPrompt }] });
+
+    if (conversationHistory.length > 12) {
+      conversationHistory = conversationHistory.slice(conversationHistory.length - 12);
+    }
+
+    // Get response from Gemini
+    const aiResponse = await generateGeminiContent(conversationHistory, env);
+
+    // Save history back to KV
+    if (env.CHAT_HISTORY) {
+      const historyKey = `history:${channelId}`;
+      conversationHistory.push({ role: 'model', parts: [{ text: aiResponse }] });
+      await env.CHAT_HISTORY.put(historyKey, JSON.stringify(conversationHistory), { expirationTtl: 86400 });
+    }
+
+    return jsonResponse({ response: aiResponse });
+
+  } catch (err) {
+    console.error("❌ Error processing gateway forward:", err);
+    return jsonResponse({ response: "⚠️ Error processing your prompt in the Cloudflare backend." }, 500);
+  }
+}
+
+/**
+ * Route both Chat Input (slash commands) and Context Menu commands
+ */
+async function handleApplicationCommand(interaction, env, ctx) {
+  const { name, options, type: commandType } = interaction.data;
   const userId = interaction.member?.user?.id || interaction.user?.id;
   const channelId = interaction.channel_id;
 
-  // Global Moderator / Admin check (for ban/unban commands)
-  // Check if user has ADMINISTRATOR permission (0x8) or MANAGE_GUILD (0x20)
+  console.log(`🤖 Command Triggered: /${name} (Type: ${commandType}) by User ID: ${userId} in Channel: ${channelId}`);
+
+  // Handle Context Menu commands (Type 3 is MESSAGE context command)
+  if (commandType === 3 && name === 'Reply with AI') {
+    const targetId = interaction.data.target_id;
+    const targetMessage = interaction.data.resolved?.messages?.[targetId];
+    const userPrompt = targetMessage?.content;
+
+    if (!userPrompt) {
+      return ephemeralResponse("Can't read the contents of that message to reply!");
+    }
+
+    // Rate Limiting Check
+    const now = Date.now();
+    const lastRequest = localRateLimits.get(userId) || 0;
+    if (now - lastRequest < RATE_LIMIT_COOLDOWN_MS) {
+      return ephemeralResponse("⏳ Slow down! Please wait a few seconds before requesting another reply.");
+    }
+    localRateLimits.set(userId, now);
+
+    // Defer response to avoid Discord 3-second timeout limits
+    ctx.waitUntil(
+      handleDeferredChat(interaction, userPrompt, channelId, userId, env, true, targetMessage.author?.username)
+    );
+
+    return jsonResponse({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
+  }
+
+  // Handle standard slash commands
   const permissions = BigInt(interaction.member?.permissions || '0');
   const isStaff = (permissions & 0x8n) === 0x8n || (permissions & 0x20n) === 0x20n;
 
@@ -90,8 +188,11 @@ async function handleSlashCommand(interaction, env, ctx) {
         return ephemeralResponse("Please provide a prompt for the AI.");
       }
 
-      // Check Ban Status
-      const isBanned = await env.CHAT_HISTORY.get(`banned:${userId}`);
+      // Check Ban Status Safely
+      let isBanned = false;
+      if (env.CHAT_HISTORY) {
+        isBanned = await env.CHAT_HISTORY.get(`banned:${userId}`);
+      }
       if (isBanned) {
         return ephemeralResponse("❌ You are currently restricted from interacting with the AI on this server.");
       }
@@ -104,19 +205,19 @@ async function handleSlashCommand(interaction, env, ctx) {
       }
       localRateLimits.set(userId, now);
 
-      // DEFER the response to avoid Discord's 3-second timeout limits.
-      // This tells Discord "The bot is thinking..." and keeps the connection open.
+      // Defer response to avoid Discord 3-second timeout limits
       ctx.waitUntil(
-        handleDeferredChat(interaction, userPrompt, channelId, userId, env)
+        handleDeferredChat(interaction, userPrompt, channelId, userId, env, false)
       );
 
-      return jsonResponse({
-        type: 5 // InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
-      });
+      return jsonResponse({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
     }
 
     case 'reset': {
-      await env.CHAT_HISTORY.delete(`history:${channelId}`);
+      if (env.CHAT_HISTORY) {
+        await env.CHAT_HISTORY.delete(`history:${channelId}`);
+        console.log(`🧹 Chat history cleared for channel: ${channelId}`);
+      }
       return jsonResponse({
         type: 4,
         data: {
@@ -127,29 +228,22 @@ async function handleSlashCommand(interaction, env, ctx) {
 
     case 'lb': {
       const gamemode = options?.find(opt => opt.name === 'gamemode')?.value || 'swordffa1';
-      const leaderboardData = generateMockLeaderboard(gamemode);
       return jsonResponse({
         type: 4,
-        data: {
-          embeds: [leaderboardData]
-        }
+        data: { embeds: [generateMockLeaderboard(gamemode)] }
       });
     }
 
     case 'mconline': {
-      // Defer server pinging since API fetches can occasionally exceed 3 seconds
       ctx.waitUntil(handleDeferredPing(interaction, env));
       return jsonResponse({ type: 5 });
     }
 
     case 'elostats': {
       const player = options?.find(opt => opt.name === 'player')?.value;
-      const statsEmbed = generateMockPlayerStats(player);
       return jsonResponse({
         type: 4,
-        data: {
-          embeds: [statsEmbed]
-        }
+        data: { embeds: [generateMockPlayerStats(player)] }
       });
     }
 
@@ -158,12 +252,12 @@ async function handleSlashCommand(interaction, env, ctx) {
       const targetUser = options?.find(opt => opt.name === 'user')?.value;
       if (!targetUser) return ephemeralResponse("Please specify a user to ban.");
 
-      await env.CHAT_HISTORY.put(`banned:${targetUser}`, "true");
+      if (env.CHAT_HISTORY) {
+        await env.CHAT_HISTORY.put(`banned:${targetUser}`, "true");
+      }
       return jsonResponse({
         type: 4,
-        data: {
-          content: `🚨 <@${targetUser}> has been restricted from using the AI features.`
-        }
+        data: { content: `🚨 <@${targetUser}> has been restricted from using the AI features.` }
       });
     }
 
@@ -172,12 +266,12 @@ async function handleSlashCommand(interaction, env, ctx) {
       const targetUser = options?.find(opt => opt.name === 'user')?.value;
       if (!targetUser) return ephemeralResponse("Please specify a user to unban.");
 
-      await env.CHAT_HISTORY.delete(`banned:${targetUser}`);
+      if (env.CHAT_HISTORY) {
+        await env.CHAT_HISTORY.delete(`banned:${targetUser}`);
+      }
       return jsonResponse({
         type: 4,
-        data: {
-          content: `✅ <@${targetUser}> is no longer restricted from using the AI.`
-        }
+        data: { content: `✅ <@${targetUser}> is no longer restricted from using the AI.` }
       });
     }
 
@@ -189,66 +283,95 @@ async function handleSlashCommand(interaction, env, ctx) {
 /**
  * Handles deferred AI response generation asynchronously
  */
-async function handleDeferredChat(interaction, prompt, channelId, userId, env) {
-  const patchUrl = `https://discord.com/api/v10/webhooks/${env.DISCORD_APPLICATION_ID}/${interaction.token}/messages/@original`;
+async function handleDeferredChat(interaction, prompt, channelId, userId, env, isContextMenu = false, originalAuthor = "") {
+  const applicationId = interaction.application_id;
+  const patchUrl = `https://discord.com/api/v10/webhooks/${applicationId}/${interaction.token}/messages/@original`;
   
+  console.log(`[Deferred Engine] Starting task for User: ${userId}. URL: ${patchUrl}`);
+
   try {
-    const historyKey = `history:${channelId}`;
-    
-    // Retrieve past channel memory from KV namespace
     let conversationHistory = [];
-    const savedHistory = await env.CHAT_HISTORY.get(historyKey);
-    if (savedHistory) {
-      try {
-        conversationHistory = JSON.parse(savedHistory);
-      } catch (e) {
-        conversationHistory = [];
+    
+    if (env.CHAT_HISTORY) {
+      console.log(`[Deferred Engine] Fetching conversation memory from KV storage...`);
+      const historyKey = `history:${channelId}`;
+      const savedHistory = await env.CHAT_HISTORY.get(historyKey);
+      if (savedHistory) {
+        try {
+          conversationHistory = JSON.parse(savedHistory);
+        } catch (e) {
+          console.warn(`[Deferred Engine] Failed to parse history JSON, resetting channel context:`, e);
+          conversationHistory = [];
+        }
       }
     }
 
-    // Append new user message
-    conversationHistory.push({ role: 'user', parts: [{ text: prompt }] });
+    let cleanPrompt = prompt;
+    if (isContextMenu) {
+      cleanPrompt = `Reply to the following message sent by ${originalAuthor || 'another user'}: "${prompt}"`;
+    }
 
-    // Enforce sliding window history length to stay within token limits and optimize performance
+    conversationHistory.push({ role: 'user', parts: [{ text: cleanPrompt }] });
+
     if (conversationHistory.length > 12) {
       conversationHistory = conversationHistory.slice(conversationHistory.length - 12);
     }
 
-    // Call Gemini with integrated retry-backoff
+    console.log(`[Deferred Engine] Querying Gemini AI APIs...`);
     const aiResponse = await generateGeminiContent(conversationHistory, env);
+    console.log(`[Deferred Engine] Gemini AI response received successfully.`);
 
-    // Save update history back to Cloudflare KV
-    conversationHistory.push({ role: 'model', parts: [{ text: aiResponse }] });
-    await env.CHAT_HISTORY.put(historyKey, JSON.stringify(conversationHistory), { expirationTtl: 86400 }); // Keep history for 24 hours
+    if (env.CHAT_HISTORY) {
+      const historyKey = `history:${channelId}`;
+      conversationHistory.push({ role: 'model', parts: [{ text: aiResponse }] });
+      await env.CHAT_HISTORY.put(historyKey, JSON.stringify(conversationHistory), { expirationTtl: 86400 });
+    }
 
-    // Send original response back to Discord
-    await fetch(patchUrl, {
+    let finalContent = "";
+    if (isContextMenu) {
+      finalContent = `💬 **Replying to ${originalAuthor ? `**${originalAuthor}**` : 'Message'}:** *"${prompt.length > 80 ? prompt.substring(0, 80) + '...' : prompt}"*\n\n${aiResponse}`;
+    } else {
+      finalContent = `💬 **<@${userId}>:** ${prompt.length > 150 ? prompt.substring(0, 150) + '...' : prompt}\n\n${aiResponse}`;
+    }
+
+    const patchRes = await fetch(patchUrl, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        content: `💬 **<@${userId}>:** ${prompt.length > 150 ? prompt.substring(0, 150) + '...' : prompt}\n\n${aiResponse}`
-      })
+      body: JSON.stringify({ content: finalContent })
     });
+
+    if (patchRes.ok) {
+      console.log(`✨ [Deferred Engine] Success! Discord original message updated.`);
+    } else {
+      console.error(`❌ [Deferred Engine] Failed to patch Discord. Response Status: ${patchRes.status}`);
+    }
 
   } catch (error) {
-    console.error("AI Generation / Patching failed:", error);
-    await fetch(patchUrl, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        content: `❌ **AI Processing Error:** The AI service failed to respond. Please try again.`
-      })
-    });
+    console.error("❌ [Deferred Engine] Error occurred during deferred processing:", error);
+    try {
+      await fetch(patchUrl, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: `❌ **AI Processing Error:** Something went wrong in the background.`
+        })
+      });
+    } catch (patchErr) {
+      console.error("❌ Failed to send crash notification back to Discord:", patchErr);
+    }
   }
 }
 
 /**
- * Calls Gemini endpoint with mandatory exponential backoff
+ * Call Gemini with error-logging and retry support
  */
 async function generateGeminiContent(contents, env) {
-  const apiKey = env.GOOGLE_API_KEY || "";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL || GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  const apiKey = env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing 'GOOGLE_API_KEY' secret variable.");
+  }
 
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL || GEMINI_MODEL}:generateContent?key=${apiKey}`;
   const payload = {
     contents: contents,
     systemInstruction: {
@@ -257,7 +380,7 @@ async function generateGeminiContent(contents, env) {
   };
 
   let delay = 1000;
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 1; attempt <= 5; attempt++) {
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -268,38 +391,32 @@ async function generateGeminiContent(contents, env) {
       if (response.ok) {
         const json = await response.json();
         const responseText = json.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (responseText) {
-          return responseText;
-        }
-        throw new Error("Empty candidate parts returned from model");
+        if (responseText) return responseText;
+        throw new Error("Gemini returned empty parts.");
       }
 
-      // Handle server level issues (5xx) or rate limits (429)
       if (response.status >= 500 || response.status === 429) {
-        console.warn(`Gemini API returned status ${response.status}. Retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2; // Exponential Backoff
+        delay *= 2;
         continue;
       }
 
-      const errText = await response.text();
-      throw new Error(`Gemini API Error Status ${response.status}: ${errText}`);
+      const errorText = await response.text();
+      throw new Error(`Non-retriable Gemini Status: ${errorText}`);
     } catch (err) {
-      if (attempt === 4) throw err;
+      if (attempt === 5) throw err;
       await new Promise(resolve => setTimeout(resolve, delay));
       delay *= 2;
     }
   }
-  throw new Error("Max API retries reached. Request failed.");
 }
 
 /**
- * Handles asynchronous server status retrieval
+ * Handles deferred server status check
  */
 async function handleDeferredPing(interaction, env) {
-  const patchUrl = `https://discord.com/api/v10/webhooks/${env.DISCORD_APPLICATION_ID}/${interaction.token}/messages/@original`;
-  
-  // Custom server IP configuration or default
+  const applicationId = interaction.application_id;
+  const patchUrl = `https://discord.com/api/v10/webhooks/${applicationId}/${interaction.token}/messages/@original`;
   const serverIp = env.MINECRAFT_SERVER_IP || "play.astralyxpvp.com";
 
   try {
@@ -319,7 +436,7 @@ async function handleDeferredPing(interaction, env) {
               { name: "⚡ Ping/Latency", value: "Excellent", inline: true },
               { name: "🏷️ Version", value: data.version?.name_clean || "1.20+", inline: true }
             ],
-            color: 3066993, // Green
+            color: 3066993,
             timestamp: new Date().toISOString()
           }]
         })
@@ -331,8 +448,8 @@ async function handleDeferredPing(interaction, env) {
         body: JSON.stringify({
           embeds: [{
             title: `🔴 ${serverIp} is OFFLINE`,
-            description: `We couldn't connect to the server. It might be undergoing maintenance, update cycles, or hosting a custom match, check back soon!`,
-            color: 15158332, // Red
+            description: `We couldn't connect to the server right now.`,
+            color: 15158332,
             timestamp: new Date().toISOString()
           }]
         })
@@ -343,18 +460,14 @@ async function handleDeferredPing(interaction, env) {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        content: `❌ Could not reach Astralyx IP Server Status right now. Please verify IP manually or contact a coordinator.`
+        content: `❌ Could not reach Astralyx Minecraft Server Status.`
       })
     });
   }
 }
 
-/**
- * Mock stats generation helper
- */
 function generateMockPlayerStats(username) {
   const cleanUser = username.replace(/[^a-zA-Z0-9_]/g, "");
-  // Generate pseudorandom stable ELO scores based on the name length/characters
   const baseSeed = cleanUser.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
   const swordElo = 1000 + (baseSeed % 850);
   const maceElo = 950 + ((baseSeed * 3) % 720);
@@ -362,19 +475,15 @@ function generateMockPlayerStats(username) {
 
   return {
     title: `⚔️ Player PvP Profile: ${cleanUser}`,
-    description: `Real-time Competitive ELO Ratings across registered Astralyx PvP arenas.`,
-    color: 16750848, // Orange
-    thumbnail: {
-      url: `https://mc-heads.net/avatar/${cleanUser}/100`
-    },
+    description: `Competitive ELO Ratings across registered Astralyx PvP arenas.`,
+    color: 16750848,
+    thumbnail: { url: `https://mc-heads.net/avatar/${cleanUser}/100` },
     fields: [
       { name: "🗡️ Sword FFA ELO", value: `**${swordElo}** (Tier: ${getEloTier(swordElo)})`, inline: false },
       { name: "🔨 Mace FFA ELO", value: `**${maceElo}** (Tier: ${getEloTier(maceElo)})`, inline: false },
       { name: "🛡️ Netherite Pot ELO", value: `**${nethElo}** (Tier: ${getEloTier(nethElo)})`, inline: false }
     ],
-    footer: {
-      text: "AstralyxPvP Stats Database"
-    },
+    footer: { text: "AstralyxPvP Stats Database" },
     timestamp: new Date().toISOString()
   };
 }
@@ -387,9 +496,6 @@ function getEloTier(elo) {
   return "Bronze 🥉";
 }
 
-/**
- * Mock leaderboard data helper
- */
 function generateMockLeaderboard(gamemode) {
   const modeNames = {
     swordffa1: "Sword FFA",
@@ -398,12 +504,11 @@ function generateMockLeaderboard(gamemode) {
   };
 
   const modeColors = {
-    swordffa1: 3447003, // Blue
-    maceffa: 10181046, // Purple
-    nethpotffa: 15105570 // Gold
+    swordffa1: 3447003,
+    maceffa: 10181046,
+    nethpotffa: 15105570
   };
 
-  // Static mock leaders
   const topPlayers = [
     { name: "PvPGod_Astral", elo: 2145 },
     { name: "Crystallized", elo: 2012 },
@@ -426,22 +531,13 @@ function generateMockLeaderboard(gamemode) {
   };
 }
 
-/**
- * Standard Ephemeral (private) response helper
- */
 function ephemeralResponse(text) {
   return jsonResponse({
     type: 4,
-    data: {
-      content: text,
-      flags: 64 // Ephemeral flag: visible only to trigger user
-    }
+    data: { content: text, flags: 64 }
   });
 }
 
-/**
- * Standard JSON Response helper
- */
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
