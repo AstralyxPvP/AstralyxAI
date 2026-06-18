@@ -63,7 +63,8 @@ async function establishDiscordConnection(env, ctx) {
   }
 
   const token = env.DISCORD_TOKEN;
-  const gatewayUrl = "wss://gateway.discord.gg/?v=10&encoding=json";
+  // Use https:// instead of wss:// for Cloudflare fetch outbound upgrade handshakes
+  const gatewayUrl = "https://gateway.discord.gg/?v=10&encoding=json";
 
   console.log("🔌 Connecting to Discord Gateway via Cloudflare WebSockets...");
   
@@ -79,13 +80,14 @@ async function establishDiscordConnection(env, ctx) {
     throw new Error("Cloudflare failed to upgrade connection to WebSocket.");
   }
 
-  ws.accept();
+  // CRITICAL FIX: Removed ws.accept() since this is an outbound CLIENT socket.
+  // Calling accept() here was causing immediate script termination on Cloudflare.
   globalWebSocket = ws;
 
   ws.addEventListener("message", async (event) => {
     try {
       const payload = JSON.parse(event.data);
-      const { op, t, d, s } = payload;
+      const { op, d, s, t } = payload;
 
       if (s) sequenceNumber = s;
 

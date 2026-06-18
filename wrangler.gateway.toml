@@ -1,0 +1,11 @@
+name = "discord-ai-gateway"
+main = "cloud-gateway.js"
+compatibility_date = "2026-06-01"
+
+# Automatically triggers the worker every minute to self-heal and keep the WebSocket connected
+[triggers]
+crons = [ "* * * * *" ]
+
+[observability.logs]
+enabled = true
+invocation_logs = true
