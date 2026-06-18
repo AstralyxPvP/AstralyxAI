@@ -6,11 +6,11 @@ import 'dotenv/config';
 const commands = [
   {
     name: 'chat',
-    description: 'Chat with the AI',
+    description: 'Chat with the Astralyx PvP AI companion',
     options: [
       {
         name: 'message',
-        description: 'What do you want to say?',
+        description: 'What do you want to ask or say to the AI?',
         type: 3, // STRING
         required: true,
       },
