@@ -173,7 +173,7 @@ async function handleGatewayForward(request, env) {
     if (conversationHistory.length > 12) {
       conversationHistory = conversationHistory.slice(conversationHistory.length - 12);
     }
-
+Gateway
     // Fetch from Gemini
     const aiResponse = await generateGeminiContent(conversationHistory, env);
 
