@@ -11,7 +11,7 @@ kv_namespaces = [
 # Non-secret config can go here. Secrets (DISCORD_PUBLIC_KEY, GOOGLE_API_KEY)
 # are set separately with `wrangler secret put`, not written in this file.
 [vars]
-GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 [observability.logs]
 enabled = true
