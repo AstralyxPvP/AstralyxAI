@@ -206,6 +206,32 @@ async function toolGetPlayerStats(player) {
   }
 }
 
+async function toolSearchWeb(query, env) {
+  try {
+    const apiKey = env.SERPER_API_KEY;
+    if (!apiKey) return { error: "Search not configured." };
+    const res = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: {
+        "X-API-KEY": apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ q: query, num: 5 })
+    });
+    if (!res.ok) throw new Error(`Search API error: ${res.status}`);
+    const data = await res.json();
+    const results = (data.organic || []).slice(0, 5).map(item => ({
+      title: item.title,
+      snippet: item.snippet,
+      link: item.link
+    }));
+    if (results.length === 0) return { results: [], message: "No results found." };
+    return { query, results };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
 async function toolGetServerStatus() {
   try {
     const res = await fetch(`${API_BASE}?serverStatus=true`);
@@ -464,9 +490,7 @@ async function generateGeminiContent(contents, env) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL || GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   // Tools manifest definition matching structural spec
-  const tools = [
-    { googleSearch: {} },
-    {
+  const tools = [{
     functionDeclarations: [
       {
         name: "get_leaderboard",
@@ -500,10 +524,23 @@ async function generateGeminiContent(contents, env) {
       {
         name: "get_server_status",
         description: "Check whether the Astralyx Minecraft server is online and retrieve the current player count."
+      },
+      {
+        name: "search_web",
+        description: "Search the web for current information, recent events, news, or anything that may not be in your training data. Use this when the user asks about something time-sensitive or that you're unsure about.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            query: {
+              type: "STRING",
+              description: "The search query to look up on Google."
+            }
+          },
+          required: ["query"]
+        }
       }
     ]
-  }
-  ];
+  }];
 
   let currentContents = [...contents];
 
@@ -553,6 +590,8 @@ async function generateGeminiContent(contents, env) {
           result = await toolGetPlayerStats(args.player);
         } else if (name === "get_server_status") {
           result = await toolGetServerStatus();
+        } else if (name === "search_web") {
+          result = await toolSearchWeb(args.query, env);
         } else {
           result = { error: "Unknown action" };
         }
@@ -576,23 +615,7 @@ async function generateGeminiContent(contents, env) {
 
     // Return standard text response once no calls are remaining
     const responseText = parts.find(p => p.text)?.text;
-    if (!responseText) return "I couldn't process that request.";
-
-    // Append Google Search grounding citations if present
-    const groundingMeta = candidate?.groundingMetadata;
-    const chunks = groundingMeta?.groundingChunks;
-    if (chunks && chunks.length > 0) {
-      const sources = chunks
-        .filter(c => c.web?.uri && c.web?.title)
-        .slice(0, 3)
-        .map((c, i) => `[${i + 1}] [${c.web.title}](${c.web.uri})`)
-        .join('\n');
-      if (sources) {
-        return `${responseText}\n\n🔍 **Sources:**\n${sources}`;
-      }
-    }
-
-    return responseText;
+    return responseText || "I couldn't process that request.";
   }
 
   throw new Error("Maximum function resolution loop limit exceeded.");
