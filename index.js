@@ -283,22 +283,29 @@ async function toolSearchWeb(query, env) {
   try {
     const apiKey = env.SERPER_API_KEY;
     if (!apiKey) return { error: "Search not configured." };
-    const res = await fetch("https://google.serper.dev/search", {
+    // Use /news endpoint for news queries, /search for everything else
+    const isNewsQuery = /\b(news|today|latest|breaking|headline|current|update|score|result|match|winner)\b/i.test(query);
+    const serperEndpoint = isNewsQuery ? "https://google.serper.dev/news" : "https://google.serper.dev/search";
+
+    const res = await fetch(serperEndpoint, {
       method: "POST",
       headers: {
         "X-API-KEY": apiKey,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ q: query, num: 5 })
+      body: JSON.stringify({ q: query, num: 5, gl: "in", hl: "en" })
     });
     if (!res.ok) throw new Error(`Search API error: ${res.status}`);
     const data = await res.json();
-    const organic = (data.organic || []).slice(0, 5);
-    if (organic.length === 0) return { results: [], message: "No results found." };
+    const organic = (data.organic || data.news || []).slice(0, 5);
+    if (organic.length === 0 && !data.answerBox && !data.knowledgeGraph) return { results: [], message: "No results found." };
 
-    // Try to fetch full content from top result
-    const top = organic[0];
-    const pageContent = await fetchPageContent(top.link);
+    // Extract instant answer if available (great for sports scores, facts, conversions)
+    const instant = data.answerBox
+      ? { type: "answer_box", answer: data.answerBox.answer || data.answerBox.snippet, title: data.answerBox.title }
+      : data.knowledgeGraph
+      ? { type: "knowledge_graph", title: data.knowledgeGraph.title, description: data.knowledgeGraph.description }
+      : null;
 
     const results = organic.map(item => ({
       title: item.title,
@@ -306,20 +313,32 @@ async function toolSearchWeb(query, env) {
       link: item.link
     }));
 
+    // Try to fetch full content from top 3 results (fallback chain)
+    let pageContent = null;
+    let pageSource = null;
+    for (const candidate of organic.slice(0, 3)) {
+      pageContent = await fetchPageContent(candidate.link);
+      if (pageContent) {
+        pageSource = { title: candidate.title, link: candidate.link };
+        break;
+      }
+    }
+
     if (pageContent) {
       return {
         query,
+        ...(instant && { instant_answer: instant }),
         top_result: {
-          title: top.title,
-          link: top.link,
+          title: pageSource.title,
+          link: pageSource.link,
           full_content: pageContent
         },
-        other_results: results.slice(1)
+        other_results: results.filter(r => r.link !== pageSource.link).slice(0, 3)
       };
     }
 
-    // Fallback to snippets if fetch failed
-    return { query, results };
+    // Fallback to snippets if all fetches failed
+    return { query, ...(instant && { instant_answer: instant }), results };
   } catch (e) {
     return { error: e.message };
   }
@@ -389,8 +408,8 @@ async function handleGatewayForward(request, env) {
     const cleanPrompt = `(${username}): ${prompt}`;
     conversationHistory.push({ role: 'user', parts: [{ text: cleanPrompt }] });
 
-    if (conversationHistory.length > 12) {
-      conversationHistory = conversationHistory.slice(conversationHistory.length - 12);
+    if (conversationHistory.length > 20) {
+      conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
     }
 
     // Fetch from Gemini with Native Tool executions embedded within helper
@@ -548,8 +567,8 @@ async function handleDeferredChat(interaction, prompt, channelId, userId, env, i
     const cleanPrompt = `(${originalAuthor}): ${prompt}`;
     conversationHistory.push({ role: 'user', parts: [{ text: cleanPrompt }] });
 
-    if (conversationHistory.length > 12) {
-      conversationHistory = conversationHistory.slice(conversationHistory.length - 12);
+    if (conversationHistory.length > 20) {
+      conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
     }
 
     const aiResponse = await generateGeminiContent(conversationHistory, env);
@@ -638,7 +657,7 @@ async function generateGeminiContent(contents, env) {
   let currentContents = [...contents];
 
   // Up to 5 loops of tool call resolution
-  for (let run = 1; run <= 5; run++) {
+  for (let run = 1; run <= 8; run++) {
     const payload = {
       contents: currentContents,
       systemInstruction: {
