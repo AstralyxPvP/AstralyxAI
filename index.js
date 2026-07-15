@@ -78,30 +78,13 @@ Roles arrive in the message header. Treat them as follows:
 If no special role is present, treat them as a regular Member.
 
 # SERVER INFO
-- IP: java.astralyxpvp.int.yt
-- Website: astralyxpvp.pages.dev
-- What makes us special: South Asian routing (low latency), cracked + premium support, 1.9+ skill-based combat, live ELO tracking, anti-cheat, zero paywalls.
-- Account linking: In-game /linkaccount then in Discord /link <username> <code>
-- Emails: @astralyxpvp.int.yt domain (info@, frostrax@, indiancoder3@, dreamlong@, al13n@)
-
-# USEFUL CHANNELS & LINKS
-- Staff Applications: astralyxpvp.pages.dev/apply then submit in <#1477272661519368283>
-- Announcements: <#1477033205017346259>
-- Support tickets: <#1477032862892163113>
-
-# PUNISHMENT GUIDELINES
-- Hacks/Unfair mods: 30-day ban → Permanent blacklist
-- Chat toxicity/Swearing: 30-min → 3-hour → 1-day mute
-- Major advertising: 6-month → 12-month → Permanent mute
-- Light advertising: 12-hour → 3-day → 7-day ban
-- Staff disrespect: Warning → 1-hour → 6-hour mute
-- Bug exploiting: 14-day → Permanent ban
-- Ban evading/DDoS: Permanent IP blacklist (non-appealable)
-- Doxxing: Permanent ban + referral to authorities
+- IP: java.astralyxpvp.int.yt | Website: astralyxpvp.pages.dev
+- For ALL detailed info (rules, channels, staff, punishments, FAQs, ranks) use the query_knowledge_base tool — the full knowledge base is stored there.
 
 # TOOLS — USE THEM PROACTIVELY
-- search_web: USE THIS whenever you are unsure or the question is about anything current, recent, or time-sensitive. NEVER guess — always search first. NEVER invent URLs, handles, or links. If search fails, say so honestly.
-- get_leaderboard: Use when players ask about rankings.
+- query_knowledge_base: USE THIS for ANY question about server rules, punishments, channels, staff, ranks, FAQs, website pages, voting. Always query before answering server-specific questions.
+- search_web: USE THIS for anything current, recent, or time-sensitive (news, scores, live events). NEVER guess — search first. NEVER invent URLs or handles.
+- get_leaderboard: Use when players ask about ELO rankings.
 - get_player_stats: Use when players ask about a specific player's ELO.
 - get_server_status: Use when players ask if the server is online.
 
@@ -297,6 +280,32 @@ async function fetchPageContent(url) {
 
   // Fallback: Jina reader handles JS-rendered sites (Twitch, Twitter, Reddit etc.)
   return await fetchWithJina(url);
+}
+
+async function toolQueryKnowledgeBase(category, key, env) {
+  try {
+    if (!env.DB) return { error: "Knowledge base not configured." };
+
+    let query, params;
+    if (category && key) {
+      query = "SELECT category, key, value FROM kb WHERE category = ? AND key = ?";
+      params = [category, key];
+    } else if (category) {
+      query = "SELECT category, key, value FROM kb WHERE category = ?";
+      params = [category];
+    } else {
+      query = "SELECT category, key, value FROM kb";
+      params = [];
+    }
+
+    const result = await env.DB.prepare(query).bind(...params).all();
+    if (!result.results || result.results.length === 0) {
+      return { message: "No knowledge base entries found for that query." };
+    }
+    return { results: result.results };
+  } catch (e) {
+    return { error: e.message };
+  }
 }
 
 async function toolSearchWeb(query, env) {
@@ -658,6 +667,24 @@ async function generateGeminiContent(contents, env) {
         description: "Check whether the Astralyx Minecraft server is online and retrieve the current player count."
       },
       {
+        name: "query_knowledge_base",
+        description: "Query the AstralyxPvP knowledge base for detailed server information including rules, punishments, channels, staff, ranks, FAQs, voting, and website pages. Use this whenever you need specific server info instead of guessing.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            category: {
+              type: "STRING",
+              description: "Category to query. Options: server, store, website, channels, staff, rules, punishments, faq. Leave empty to search all categories."
+            },
+            key: {
+              type: "STRING",
+              description: "Specific key to look up within the category. Leave empty to get all entries in the category."
+            }
+          },
+          required: []
+        }
+      },
+      {
         name: "search_web",
         description: "Search the web for current information, recent events, news, or anything that may not be in your training data. Use this when the user asks about something time-sensitive or that you're unsure about.",
         parameters: {
@@ -724,6 +751,8 @@ async function generateGeminiContent(contents, env) {
           result = await toolGetServerStatus();
         } else if (name === "search_web") {
           result = await toolSearchWeb(args.query, env);
+        } else if (name === "query_knowledge_base") {
+          result = await toolQueryKnowledgeBase(args.category, args.key, env);
         } else {
           result = { error: "Unknown action" };
         }
