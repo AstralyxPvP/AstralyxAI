@@ -9,7 +9,7 @@ kv_namespaces = [
 [[d1_databases]]
 binding = "DB"
 database_name = "astralyx-kb"
-database_id = "PASTE_YOUR_D1_ID_HERE"
+database_id = "9257e878-be7c-4927-b4c4-ddb9c4753799"
 
 [vars]
 GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
