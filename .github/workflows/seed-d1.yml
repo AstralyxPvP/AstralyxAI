@@ -1,0 +1,25 @@
+name: Seed D1 Knowledge Base
+
+on:
+  workflow_dispatch: # Run manually from GitHub Actions tab
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      - name: Execute SQL on D1
+        run: wrangler d1 execute astralyx-kb --file=knowledge_base.sql --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
