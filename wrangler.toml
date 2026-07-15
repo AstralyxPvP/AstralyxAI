@@ -2,16 +2,17 @@ name = "discord-ai-bot"
 main = "index.js"
 compatibility_date = "2026-06-01"
 
-# Create this with: npx wrangler kv namespace create CHAT_HISTORY
-# then paste the id it gives you below.
 kv_namespaces = [
   { binding = "CHAT_HISTORY", id = "f95e86c86fb645948e3d7ba3117d1434" }
 ]
 
-# Non-secret config can go here. Secrets (DISCORD_PUBLIC_KEY, GOOGLE_API_KEY)
-# are set separately with `wrangler secret put`, not written in this file.
+[[d1_databases]]
+binding = "DB"
+database_name = "astralyx-kb"
+database_id = "PASTE_YOUR_D1_ID_HERE"
+
 [vars]
-GEMINI_MODEL = "gemini-3.1-flash-lite"
+GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
 
 [observability.logs]
 enabled = true
