@@ -89,6 +89,7 @@ If no special role is present, treat them as a regular Member.
 - get_leaderboard: Use when players ask about ELO rankings.
 - get_player_stats: Use when players ask about a specific player's ELO.
 - get_server_status: Use when players ask if the server is online.
+- get_announcements: Use when players ask about recent server updates, news, changes, or announcements posted by staff.
 
 # FORMATTING RULES
 - Discord Markdown only: **bold**, *italic*, \`code\`, bullet lists. No raw HTML ever.
@@ -496,7 +497,37 @@ async function toolQueryKnowledgeBase(category, key, env) {
     return { error: e.message };
   }
 }
+// Announcement Channel ID
+const ANNOUNCEMENTS_CHANNEL_ID = "1477033205017346259";
 
+/**
+ * Tool to fetch recent posts from the announcements channel
+ */
+async function toolGetAnnouncements(limit = 5, env) {
+  try {
+    const fetchLimit = Math.min(Math.max(limit, 1), 10);
+    const res = await fetch(`https://discord.com/api/v10/channels/${ANNOUNCEMENTS_CHANNEL_ID}/messages?limit=${fetchLimit}`, {
+      headers: {
+        'Authorization': `Bot ${env.DISCORD_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error(`Discord API error: ${res.status}`);
+    }
+
+    const messages = await res.json();
+    return messages.map(msg => ({
+      author: msg.author?.global_name || msg.author?.username || "Staff",
+      content: msg.content,
+      timestamp: msg.timestamp,
+      embeds: msg.embeds?.map(e => ({ title: e.title, description: e.description })) || []
+    }));
+  } catch (e) {
+    return { error: `Failed to fetch announcements: ${e.message}` };
+  }
+}
 async function toolSearchWeb(query, env) {
   try {
     const apiKey = env.SERPER_API_KEY;
@@ -977,6 +1008,19 @@ async function generateGeminiContent(contents, env) {
           },
           required: ["query"]
         }
+      },
+      {
+        name: "get_announcements",
+        description: "Fetch recent official server announcements, updates, and news from the staff announcements channel. Use this whenever users ask what's new or ask about recent updates.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            limit: {
+              type: "NUMBER",
+              description: "Number of recent announcements to retrieve (1 to 10). Default is 5."
+            }
+          }
+        }
       }
     ]
   }];
@@ -1033,6 +1077,8 @@ async function generateGeminiContent(contents, env) {
           result = await toolSearchWeb(args.query, env);
         } else if (name === "query_knowledge_base") {
           result = await toolQueryKnowledgeBase(args.category, args.key, env);
+        } else if (name === "get_announcements") {
+          result = await toolGetAnnouncements(args.limit || 5, env);
         } else {
           result = { error: "Unknown action" };
         }
