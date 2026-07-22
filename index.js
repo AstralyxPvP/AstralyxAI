@@ -109,8 +109,9 @@ If no special role is present, treat them as a regular Member.
 8. NEVER echo the (Username [Roles]): prefix back in your reply.
 9. NEVER list staff members by name unless explicitly told to by the user. If asked for a staff list, say you don't have a full list and direct them to astralyxpvp.pages.dev/contact
 10. AL13N is a Developer, NOT a Manager. DreamLong is Developer + Manager. IndianCoder3 is Developer + AI Creator.
-11. The only valid website pages are: astralyxpvp.pages.dev, astralyxpvp.pages.dev/apply, astralyxpvp.pages.dev/contact. NEVER link to any other page on this domain unless you have searched and confirmed it exists.`;
-
+11. The only valid website pages are: astralyxpvp.pages.dev, astralyxpvp.pages.dev/apply, astralyxpvp.pages.dev/contact. NEVER link to any other page on this domain unless you have searched and confirmed it exists.
+12. Refer to speaking in English
+`;
 const localRateLimits = new Map();
 const RATE_LIMIT_COOLDOWN_MS = 4000;
 
