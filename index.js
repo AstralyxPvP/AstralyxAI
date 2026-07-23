@@ -337,6 +337,9 @@ export default {
       if (interaction.type === 2) { // APPLICATION_COMMAND
         return await handleApplicationCommand(interaction, env, ctx);
       }
+      if (interaction.type === 4) { // AUTOCOMPLETE
+        return await handleAutocomplete(interaction, env);
+      }
 
       return jsonResponse({ error: 'Unsupported interaction type' }, 400);
     } catch (error) {
