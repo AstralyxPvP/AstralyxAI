@@ -357,7 +357,18 @@ function isUserAdminOrAbove(userId, userRoleIds) {
   if (!userRoleIds || !Array.isArray(userRoleIds)) return false;
   return userRoleIds.some(roleId => ADMIN_AND_ABOVE_ROLE_IDS.includes(roleId));
 }
-
+/**
+ * Safely parses gamemodes whether the API returns an Array, Object, or String
+ */
+function extractGamemodes(gmData) {
+  const raw = gmData?.gamemodes || gmData;
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'object' && raw !== null) {
+    return Object.values(raw).filter(v => typeof v === 'string' || typeof v === 'number');
+  }
+  if (typeof raw === 'string') return [raw];
+  return ['swordffa1', 'maceffa', 'nethpotffa'];
+}
 /**
  * Native Tool Actions matching Web API Database structures
  */
@@ -874,7 +885,7 @@ async function handleApplicationCommand(interaction, env, ctx) {
       });
     }
 
-case 'link': {
+    case 'link': {
       const username = options?.find(opt => opt.name === 'username')?.value;
       const code = options?.find(opt => opt.name === 'code')?.value;
 
@@ -884,7 +895,7 @@ case 'link': {
       return jsonResponse({ type: 5, data: { flags: 64 } }); // Ephemeral deferred response
     }
 
-    case 'lb':
+case 'lb':
     case 'leaderboard': {
       let gamemode = options?.find(opt => opt.name === 'gamemode')?.value;
       const page = options?.find(opt => opt.name === 'page')?.value || 1;
@@ -895,9 +906,8 @@ case 'link': {
           const gmRes = await fetch(`${API_BASE}?gamemodes=true`);
           if (gmRes.ok) {
             const gmData = await gmRes.json();
-            if (Array.isArray(gmData?.gamemodes) && gmData.gamemodes.length > 0) {
-              gamemode = gmData.gamemodes[0].toLowerCase();
-            }
+            const modes = extractGamemodes(gmData);
+            if (modes.length > 0) gamemode = String(modes[0]).toLowerCase();
           }
         } catch (e) { }
       }
@@ -1249,7 +1259,7 @@ async function handleDeferredPlayerStats(interaction, player, env) {
   try {
     const gmRes = await fetch(`${API_BASE}?gamemodes=true`);
     const gmData = await gmRes.json();
-    const gamemodes = gmData?.gamemodes || ['swordffa1', 'maceffa', 'nethpotffa'];
+    const gamemodes = extractGamemodes(gmData) || ['swordffa1', 'maceffa', 'nethpotffa'];
     const modeNames = { swordffa1: "Sword FFA", maceffa: "Mace FFA", nethpotffa: "Netherite Pot FFA" };
 
     const results = await Promise.all(
