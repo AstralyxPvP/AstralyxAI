@@ -26,14 +26,16 @@ const commands = [
     options: [
       {
         name: 'gamemode',
-        description: 'Which gamemode?',
-        type: 3,
+        description: 'Gamemode',
+        type: 3, // String
+        required: true,
+        autocomplete: true, // 👈 Replaces hardcoded choices
+      },
+      {
+        name: 'page',
+        description: 'Page',
+        type: 4, // Integer
         required: false,
-        choices: [
-          { name: 'Sword FFA', value: 'swordffa1' },
-          { name: 'Mace FFA', value: 'maceffa' },
-          { name: 'Netherite Pot FFA', value: 'nethpotffa' },
-        ],
       },
     ],
   },

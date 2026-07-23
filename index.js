@@ -807,10 +807,12 @@ case 'link': {
       return jsonResponse({ type: 5, data: { flags: 64 } }); // Ephemeral deferred response
     }
 
-    case 'lb': {
+    case 'lb':
+    case 'leaderboard': {
       let gamemode = options?.find(opt => opt.name === 'gamemode')?.value;
-      
-      // Fetch default gamemode dynamically if user didn't specify one
+      const page = options?.find(opt => opt.name === 'page')?.value || 1;
+
+      // Fetch dynamic default gamemode from API if not specified by user
       if (!gamemode) {
         try {
           const gmRes = await fetch(`${API_BASE}?gamemodes=true`);
@@ -820,15 +822,14 @@ case 'link': {
               gamemode = gmData.gamemodes[0].toLowerCase();
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (!gamemode) gamemode = 'swordffa1';
 
-      ctx.waitUntil(handleDeferredLeaderboard(interaction, gamemode, env));
+      ctx.waitUntil(handleDeferredLeaderboard(interaction, gamemode.toLowerCase(), page, env));
       return jsonResponse({ type: 5 });
     }
-
     case 'mconline': {
       ctx.waitUntil(handleDeferredPing(interaction, env));
       return jsonResponse({ type: 5 });
@@ -1224,49 +1225,54 @@ async function handleDeferredPlayerStats(interaction, player, env) {
 /**
  * Leaderboard Generation - Live Standings fetched from Web API
  */
-async function handleDeferredLeaderboard(interaction, gamemode, env) {
+/**
+ * Leaderboard Generation - Live Standings with Pagination
+ */
+async function handleDeferredLeaderboard(interaction, gamemode, page = 1, env) {
   const applicationId = interaction.application_id;
   const patchUrl = `https://discord.com/api/v10/webhooks/${applicationId}/${interaction.token}/messages/@original`;
-  
+
   try {
     const res = await fetch(`${API_BASE}?leaderboard=${encodeURIComponent(gamemode)}`);
     const data = await res.json();
-    const modeNames = { swordffa1: "Sword FFA", maceffa: "Mace FFA", nethpotffa: "Netherite Pot FFA" };
-    const modeColors = { swordffa1: 3447003, maceffa: 10181046, nethpotffa: 15105570 };
 
-    if (!Array.isArray(data) || data.length === 0) {
+    if (data.error || !Array.isArray(data) || data.length === 0) {
       await fetch(patchUrl, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: `⚠️ No leaderboard standings found for **${modeNames[gamemode] || gamemode}**.` })
+        body: JSON.stringify({ content: '❌ No data could be processed for this leaderboard.' })
       });
       return;
     }
 
-    const description = data.slice(0, 10).map((player, idx) => {
-      const medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
-      const medal = medals[idx] || `#${idx + 1}`;
-      return `${medal} **${player.username}** — **${player.elo}** ELO`;
-    }).join("\n");
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const start = (pageNum - 1) * 10;
+    const pageSlice = data.slice(start, start + 10);
+
+    const desc = pageSlice.length > 0
+      ? pageSlice.map((p, i) => `**#${start + i + 1}** \`${p.username}\` - **${p.elo}**`).join('\n')
+      : 'No data available on this page.';
+
+    const totalPages = Math.ceil(data.length / 10) || 1;
 
     await fetch(patchUrl, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         embeds: [{
-          title: `🏆 Top Live Standings: ${modeNames[gamemode] || gamemode}`,
-          description,
-          color: modeColors[gamemode] || 3447003,
-          timestamp: new Date().toISOString(),
-          footer: { text: "AstralyxPvP Real-time Live Stats" }
+          title: `Leaderboard: ${gamemode.toUpperCase()}`,
+          description: desc,
+          color: 0xffd700,
+          footer: { text: `Page ${pageNum} of ${totalPages}` },
+          timestamp: new Date().toISOString()
         }]
       })
     });
-  } catch (err) {
+  } catch (e) {
     await fetch(patchUrl, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: `❌ Error fetching leaderboard data: ${err.message}` })
+      body: JSON.stringify({ content: 'Error updating leaderboard dataset.' })
     });
   }
 }
