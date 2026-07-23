@@ -741,33 +741,64 @@ async function handleGatewayForward(request, env) {
  */
 async function handleAutocomplete(interaction, env) {
   const options = interaction.data?.options || [];
-  const focusedOption = options.find(opt => opt.focused);
+
+  // 1. Locate the focused option (supports both top-level and subcommand structures)
+  let focusedOption = options.find(opt => opt.focused);
+  if (!focusedOption) {
+    const subOption = options.find(opt => Array.isArray(opt.options));
+    if (subOption) {
+      focusedOption = subOption.options.find(opt => opt.focused);
+    }
+  }
 
   if (focusedOption?.name === 'gamemode') {
     const userQuery = (focusedOption.value || '').toLowerCase();
+    const fallbackGamemodes = ['swordffa1', 'maceffa', 'nethpotffa'];
 
     try {
-      // 1. Fetch live active gamemodes from your worker API
-      const res = await fetch(`${API_BASE}?gamemodes=true`);
-      const data = await res.json();
-      const activeGamemodes = data.gamemodes || [];
+      // 2. Fetch live active gamemodes with a 2s hard timeout to protect Discord's 3s limit
+      const res = await fetch(`${API_BASE}?gamemodes=true`, {
+        signal: AbortSignal.timeout(2000)
+      });
 
-      // 2. Filter & format for Discord autocomplete response
-      const choices = activeGamemodes
+      let activeGamemodes = [];
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.gamemodes) && data.gamemodes.length > 0) {
+          activeGamemodes = data.gamemodes;
+        }
+      }
+
+      // Use API results if returned, otherwise use fallback gamemodes
+      const gamemodeList = activeGamemodes.length > 0 ? activeGamemodes : fallbackGamemodes;
+
+      // 3. Filter and map options for Discord
+      const choices = gamemodeList
         .filter(gm => gm.toLowerCase().includes(userQuery))
         .slice(0, 25)
         .map(gm => ({
-          name: gm.toUpperCase(), // Display text in Discord
-          value: gm.toLowerCase() // Value sent to /lb execution
+          name: gm.toUpperCase(), // Text shown in Discord dropdown
+          value: gm.toLowerCase() // Value passed to command logic
         }));
 
-      // 3. Type 8 = APPLICATION_COMMAND_AUTOCOMPLETE_RESULT
       return jsonResponse({
-        type: 8,
+        type: 8, // APPLICATION_COMMAND_AUTOCOMPLETE_RESULT
         data: { choices }
       });
     } catch (e) {
-      return jsonResponse({ type: 8, data: { choices: [] } });
+      // 4. Fallback execution on network lag or API error
+      const fallbackChoices = fallbackGamemodes
+        .filter(gm => gm.toLowerCase().includes(userQuery))
+        .slice(0, 25)
+        .map(gm => ({
+          name: gm.toUpperCase(),
+          value: gm.toLowerCase()
+        }));
+
+      return jsonResponse({
+        type: 8,
+        data: { choices: fallbackChoices }
+      });
     }
   }
 
