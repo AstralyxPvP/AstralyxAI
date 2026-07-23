@@ -1223,9 +1223,6 @@ async function handleDeferredPlayerStats(interaction, player, env) {
 }
 
 /**
- * Leaderboard Generation - Live Standings fetched from Web API
- */
-/**
  * Leaderboard Generation - Live Standings with Pagination
  */
 async function handleDeferredLeaderboard(interaction, gamemode, page = 1, env) {
