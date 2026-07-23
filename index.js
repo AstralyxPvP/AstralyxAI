@@ -737,12 +737,12 @@ async function handleGatewayForward(request, env) {
   }
 }
 /**
- * Real-time Autocomplete fetcher for dynamic gamemodes from KV
+ * Real-time Autocomplete fetcher for dynamic gamemodes
  */
 async function handleAutocomplete(interaction, env) {
   const options = interaction.data?.options || [];
 
-  // 1. Locate the focused option (supports both top-level and subcommand structures)
+  // Support both top-level options and subcommand structures
   let focusedOption = options.find(opt => opt.focused);
   if (!focusedOption) {
     const subOption = options.find(opt => Array.isArray(opt.options));
@@ -756,37 +756,44 @@ async function handleAutocomplete(interaction, env) {
     const fallbackGamemodes = ['swordffa1', 'maceffa', 'nethpotffa'];
 
     try {
-      // 2. Fetch live active gamemodes with a 2s hard timeout to protect Discord's 3s limit
+      // 1. Fetch with a 2.7s timeout to maximize wait window within Discord's 3s limit
       const res = await fetch(`${API_BASE}?gamemodes=true`, {
-        signal: AbortSignal.timeout(2000)
+        signal: AbortSignal.timeout(2700)
       });
 
       let activeGamemodes = [];
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.gamemodes) && data.gamemodes.length > 0) {
-          activeGamemodes = data.gamemodes;
+        const raw = data.gamemodes || data;
+
+        // 2. Flexible parsing: handles Arrays, Objects, and Strings
+        if (Array.isArray(raw)) {
+          activeGamemodes = raw;
+        } else if (typeof raw === 'object' && raw !== null) {
+          activeGamemodes = Object.values(raw).filter(v => typeof v === 'string' || typeof v === 'number');
+        } else if (typeof raw === 'string') {
+          activeGamemodes = [raw];
         }
       }
 
-      // Use API results if returned, otherwise use fallback gamemodes
+      // Use API gamemodes if found; only use fallback if the API returned nothing
       const gamemodeList = activeGamemodes.length > 0 ? activeGamemodes : fallbackGamemodes;
 
-      // 3. Filter and map options for Discord
+      // 3. Filter and map results for Discord UI
       const choices = gamemodeList
-        .filter(gm => gm.toLowerCase().includes(userQuery))
+        .filter(gm => String(gm).toLowerCase().includes(userQuery))
         .slice(0, 25)
         .map(gm => ({
-          name: gm.toUpperCase(), // Text shown in Discord dropdown
-          value: gm.toLowerCase() // Value passed to command logic
+          name: String(gm).toUpperCase(),
+          value: String(gm).toLowerCase()
         }));
 
       return jsonResponse({
-        type: 8, // APPLICATION_COMMAND_AUTOCOMPLETE_RESULT
+        type: 8,
         data: { choices }
       });
     } catch (e) {
-      // 4. Fallback execution on network lag or API error
+      // Fallback if the API request times out or errors out
       const fallbackChoices = fallbackGamemodes
         .filter(gm => gm.toLowerCase().includes(userQuery))
         .slice(0, 25)
