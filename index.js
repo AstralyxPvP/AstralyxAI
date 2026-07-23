@@ -736,7 +736,43 @@ async function handleGatewayForward(request, env) {
     return jsonResponse({ response: "⚠️ Failed to process auto-chat message in backend." }, 500);
   }
 }
+/**
+ * Real-time Autocomplete fetcher for dynamic gamemodes from KV
+ */
+async function handleAutocomplete(interaction, env) {
+  const options = interaction.data?.options || [];
+  const focusedOption = options.find(opt => opt.focused);
 
+  if (focusedOption?.name === 'gamemode') {
+    const userQuery = (focusedOption.value || '').toLowerCase();
+
+    try {
+      // 1. Fetch live active gamemodes from your worker API
+      const res = await fetch(`${API_BASE}?gamemodes=true`);
+      const data = await res.json();
+      const activeGamemodes = data.gamemodes || [];
+
+      // 2. Filter & format for Discord autocomplete response
+      const choices = activeGamemodes
+        .filter(gm => gm.toLowerCase().includes(userQuery))
+        .slice(0, 25)
+        .map(gm => ({
+          name: gm.toUpperCase(), // Display text in Discord
+          value: gm.toLowerCase() // Value sent to /lb execution
+        }));
+
+      // 3. Type 8 = APPLICATION_COMMAND_AUTOCOMPLETE_RESULT
+      return jsonResponse({
+        type: 8,
+        data: { choices }
+      });
+    } catch (e) {
+      return jsonResponse({ type: 8, data: { choices: [] } });
+    }
+  }
+
+  return jsonResponse({ type: 8, data: { choices: [] } });
+}
 /**
  * Handles Webhook Slash Commands
  */
