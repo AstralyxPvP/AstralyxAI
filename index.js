@@ -885,16 +885,6 @@ async function handleApplicationCommand(interaction, env, ctx) {
       });
     }
 
-    case 'link': {
-      const username = options?.find(opt => opt.name === 'username')?.value;
-      const code = options?.find(opt => opt.name === 'code')?.value;
-
-      if (!username || !code) return ephemeralResponse("Please provide both username and link code.");
-
-      ctx.waitUntil(handleDeferredLink(interaction, username, code, userId, env));
-      return jsonResponse({ type: 5, data: { flags: 64 } }); // Ephemeral deferred response
-    }
-
 case 'lb':
     case 'leaderboard': {
       let gamemode = options?.find(opt => opt.name === 'gamemode')?.value;
@@ -1370,48 +1360,4 @@ function jsonResponse(data, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' }
   });
-}
-/**
- * Deferred Handler for Account Linking (/link)
- */
-async function handleDeferredLink(interaction, username, code, discordId, env) {
-  const applicationId = interaction.application_id;
-  const patchUrl = `https://discord.com/api/v10/webhooks/${applicationId}/${interaction.token}/messages/@original`;
-
-  try {
-    const cleanUser = username.toLowerCase().trim();
-    const cleanCode = code.trim();
-    const authPass = env.AUTH_PASSWORD
-
-    // Include auth password in query URL (or via headers)
-    const url = `${API_BASE}?username=${encodeURIComponent(cleanUser)}&hashedCode=${encodeURIComponent(cleanCode)}&discordId=${encodeURIComponent(discordId)}&auth=${encodeURIComponent(authPass)}`;
-
-    const res = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${authPass}` // Sent via header as well for compatibility
-      }
-    });
-    
-    const data = await res.json();
-
-    let replyMessage = '❌ System error during account mapping verification.';
-    if (data.status === 'success' && data.found) {
-      replyMessage = `✅ **Successfully Linked!** Your Discord account is now linked to **${data.username}**.`;
-    } else {
-      replyMessage = '❌ **Link Failed:** Code is invalid or has expired.';
-    }
-
-    await fetch(patchUrl, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: replyMessage })
-    });
-
-  } catch (error) {
-    await fetch(patchUrl, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: `❌ Linking Error: ${error.message}` })
-    });
-  }
 }
