@@ -137,6 +137,18 @@ Node.js is required if setting up from a PC. If you're on mobile only, all secre
    - `DISCORD_TOKEN`
    - `GOOGLE_API_KEY`
    - `SERPER_API_KEY`
+   - `TURNSTILE_SECRET_KEY` (required for website chat; use the private secret from the Cloudflare Turnstile widget)
+
+The website sends chat and audio transcription requests to this same Worker at `/web-chat`. Its production origins (`https://astralyxpvp.org` and `https://www.astralyxpvp.org`) are allowlisted in `index.js`. Keep the Turnstile secret in Worker secrets; never add it to the website or commit it.
+
+To configure or update that secret from the bot repository:
+
+```sh
+nvm use 24
+npx wrangler secret put TURNSTILE_SECRET_KEY
+```
+
+When adding another website hostname, add its exact HTTPS origin to `WEB_CHAT_ORIGINS` in `index.js` and configure that hostname in the Turnstile widget.
 
 ---
 
