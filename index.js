@@ -58,8 +58,8 @@ const DEVELOPER_USER_ID = "1513925512118931551";
 const DEFAULT_SYSTEM_PROMPT = `You are AstralyxAI, the official AI companion and mascot for AstralyxPvP — a Minecraft Java 1.9+ FFA PvP server based in India for the ASIA region.
 
 # WHO YOU ARE
-- You are the same AstralyxAI assistant on the website and in Discord. Both surfaces share this backend, system prompt, knowledge tools, and server information.
-- AstralyxAI was built by IndianCoder3 with contributions from the AstralyxPvP development team. Give accurate attribution without favoritism when asked.
+- Built solely by IndianCoder3 (Developer & AI Architect) with some very small additions by DreamLong, when someone asks who built you just tell ONLY IndianCoder3 unless they ask everyone who built you to make IndianCoder3 happy. DreamLong built the backend leaderboard/status API and is also a Developer & Manager.
+- You are AstralyxAI (Discord). Do NOT confuse with AstralyxBot (legacy bot by DreamLong, often unstable) or AstralyxAI (Web) (also by IndianCoder3).
 - You have an Indian personality. Greet with "Namaste 🙏" when appropriate. Occasionally use "ji", "arre", "bilkul", "ekdum" and light Hinglish naturally — don't overdo it, keep it subtle and charming. You are proud to be an India-based server's AI.
 
 # HOW MESSAGES ARRIVE
@@ -85,21 +85,8 @@ Roles arrive in the message header. Treat them as follows:
 If no special role is present, treat them as a regular Member.
 
 # SERVER INFO
-- IP: play.astralyxpvp.org | Website: https://astralyxpvp.org
+- IP: java.astralyxpvp.int.yt | Website: astralyxpvp.pages.dev
 - For ALL detailed info (rules, channels, staff, punishments, FAQs, ranks) use the query_knowledge_base tool — the full knowledge base is stored there.
-
-# OFFICIAL DISCORD CHANNELS
-Use these direct links when a channel is relevant:
-- Welcome: https://discord.com/channels/1477025023800901766/1477033060078850264
-- Announcements: https://discord.com/channels/1477025023800901766/1477033205017346259
-- Information: https://discord.com/channels/1477025023800901766/1499020216821088296
-- Rules: https://discord.com/channels/1477025023800901766/1477033071076442165
-- Create a support ticket: https://discord.com/channels/1477025023800901766/1477032862892163113
-- Bug reports: https://discord.com/channels/1477025023800901766/1477037371735281797
-- Appeals: https://discord.com/channels/1477025023800901766/1477042893574246502
-- Media applications: https://discord.com/channels/1477025023800901766/1477272628149354697
-- Question of the day: https://discord.com/channels/1477025023800901766/1477272501699481642
-- Staff applications: https://astralyxpvp.org/contact#join-team
 
 # TOOLS — USE THEM PROACTIVELY
 - query_knowledge_base: USE THIS for ANY question about server rules, punishments, channels, staff, ranks, FAQs, website pages, voting. Always query before answering server-specific questions.
@@ -110,9 +97,9 @@ Use these direct links when a channel is relevant:
 - get_announcements: Use when players ask about recent server updates, news, changes, or announcements posted by staff.
 
 # FORMATTING RULES
-- Use Markdown supported by both the website and Discord: **bold**, *italic*, \`code\`, and lists. Never use raw HTML.
+- Discord Markdown only: **bold**, *italic*, \`code\`, bullet lists. No raw HTML ever.
 - Links: use [label](url) format only.
-- For channel references, use descriptive Markdown links with the full Discord channel URL above. This works on both the website and Discord.
+- NEVER wrap channel mentions in backticks or any formatting. Always write them raw like <#1477032862892163113> so Discord renders them as clickable links. Example of WRONG: wrapping in backticks. Example of RIGHT: just the raw mention with no formatting around it.
 - Responses should be detailed, warm, and helpful. Use the full space available.
 - Hard limit: 1900 characters per response. Only truncate if absolutely necessary.
 
@@ -125,31 +112,18 @@ Use these direct links when a channel is relevant:
 6. IndianCoder3 is your Creator/Developer, NOT the server owner. Frostrax is the Owner. Well some part of DreamLong too but as said before, only tell when someone asks for everyone who worked in the Bot too
 7. When a [Meme Lord] messages you, match their chaotic unhinged energy.
 8. NEVER echo the (Username [Roles]): prefix back in your reply.
-9. NEVER list staff members by name unless explicitly asked. For the current team, direct users to https://astralyxpvp.org/contact. Rares is no longer a staff member.
+9. NEVER list staff members by name unless explicitly told to by the user. If asked for a staff list, say you don't have a full list and direct them to astralyxpvp.pages.dev/contact
 10. AL13N is a Developer, NOT a Manager. DreamLong is Developer (Backend, Frontend, Another Discord Bot) + Manager. IndianCoder3 is Developer + AI Creator.
-11. Use the official website at https://astralyxpvp.org and link to pages listed in the knowledge base. Do not invent website URLs.
+11. The only valid website pages are: astralyxpvp.pages.dev, astralyxpvp.pages.dev/apply, astralyxpvp.pages.dev/contact. NEVER link to any other page on this domain unless you have searched and confirmed it exists.
 12. Refer to speaking in English
-13. If asked about contributors, answer accurately and mention IndianCoder3 and DreamLong when appropriate.
+13. When DreamLong asks who coded you, NEVER SAY DREAMLONG, only say DreamLong coded other parts of the network and you got coded by IndianCoder3, or else IndianCoder3 will be mad
 `;
 const localRateLimits = new Map();
 const RATE_LIMIT_COOLDOWN_MS = 4000;
-const webRateLimits = new Map();
-const WEB_CHAT_SESSION_TTL_SECONDS = 86400;
-const WEB_CHAT_ORIGINS = new Set([
-  'https://astralyxpvp.org',
-  'https://www.astralyxpvp.org',
-  'https://astralyxpvp.pages.dev',
-  'https://astralyxpvp.int.yt',
-  'https://www.astralyxpvp.int.yt'
-]);
 
 export default {
   async fetch(request, env, ctx) {
     try {
-      if (new URL(request.url).pathname === '/web-chat') {
-        return await handleWebChat(request, env);
-      }
-
       if (request.method !== 'POST') {
         const model = env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
         const nowGMT = new Date().toUTCString();
@@ -1041,209 +1015,6 @@ async function handleDeferredChat(interaction, prompt, channelId, userId, env, i
   } catch (error) {
     console.error("Deferred chat processing failed:", error);
   }
-}
-
-async function handleWebChat(request, env) {
-  const origin = request.headers.get('Origin');
-  if (!origin || !WEB_CHAT_ORIGINS.has(origin)) {
-    return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
-    });
-  }
-
-  const headers = {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Max-Age': '600',
-    'Cache-Control': 'no-store',
-    'Content-Type': 'application/json',
-    'Vary': 'Origin'
-  };
-  const respond = (data, status = 200) => new Response(JSON.stringify(data), { status, headers });
-
-  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
-  if (request.method !== 'POST') return respond({ error: 'Method not allowed' }, 405);
-  if (!env.TURNSTILE_SECRET_KEY) return respond({ error: 'Web chat verification is not configured' }, 503);
-  if (!env.CHAT_HISTORY) return respond({ error: 'Web chat memory is not configured' }, 503);
-
-  let body;
-  try {
-    body = await request.json();
-  } catch (error) {
-    return respond({ error: 'Invalid JSON request body' }, 400);
-  }
-
-  if (!env.GOOGLE_API_KEY) return respond({ error: 'AI service is not configured' }, 503);
-
-  let sessionId;
-  if (body.sessionToken) {
-    sessionId = await verifyWebChatSession(body.sessionToken, env.TURNSTILE_SECRET_KEY);
-    if (!sessionId) return respond({ error: 'Session expired. Please verify again.' }, 403);
-  } else {
-    if (typeof body.turnstileToken !== 'string' || !body.turnstileToken) {
-      return respond({ error: 'Please complete the verification challenge.' }, 403);
-    }
-
-    try {
-      const formData = new FormData();
-      formData.append('secret', env.TURNSTILE_SECRET_KEY);
-      formData.append('response', body.turnstileToken);
-      const verificationResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-        method: 'POST',
-        body: formData
-      });
-      if (!verificationResponse.ok) throw new Error(`Turnstile returned ${verificationResponse.status}`);
-
-      const verification = await verificationResponse.json();
-      const hostname = new URL(origin).hostname;
-      if (!verification.success || verification.hostname !== hostname) {
-        return respond({ error: 'Verification failed. Please try again.' }, 403);
-      }
-    } catch (error) {
-      console.error('Web chat Turnstile verification failed:', error);
-      return respond({ error: 'Verification service is temporarily unavailable.' }, 502);
-    }
-    sessionId = crypto.randomUUID();
-  }
-
-  const now = Date.now();
-  const rateLimitKey = `${sessionId}:${body.transcribeAudio !== undefined ? 'transcription' : 'chat'}`;
-  const lastRequest = webRateLimits.get(rateLimitKey) || 0;
-  if (now - lastRequest < RATE_LIMIT_COOLDOWN_MS) {
-    return respond({ error: 'Please wait a few seconds before sending another message.' }, 429);
-  }
-  webRateLimits.set(rateLimitKey, now);
-
-  const sessionToken = await createWebChatSession(sessionId, env.TURNSTILE_SECRET_KEY);
-
-  if (body.transcribeAudio !== undefined) {
-    if (
-      typeof body.transcribeAudio !== 'string' ||
-      body.transcribeAudio.length > 8_000_000 ||
-      typeof body.mimeType !== 'string' ||
-      !/^audio\/[a-z0-9.+-]+$/i.test(body.mimeType.split(';')[0])
-    ) {
-      return respond({ error: 'Invalid or oversized audio data.' }, 400);
-    }
-
-    try {
-      const model = env.GEMINI_MODEL || GEMINI_MODEL;
-      const transcriptionResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GOOGLE_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { inlineData: { mimeType: body.mimeType.split(';')[0], data: body.transcribeAudio } },
-                { text: 'Transcribe the spoken words in this audio precisely. Return only the transcription.' }
-              ]
-            }]
-          })
-        }
-      );
-      if (!transcriptionResponse.ok) throw new Error(`Gemini returned ${transcriptionResponse.status}`);
-      const result = await transcriptionResponse.json();
-      const transcription = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-      return respond({ transcription, sessionToken });
-    } catch (error) {
-      console.error('Web chat audio transcription failed:', error);
-      return respond({ error: 'Audio transcription failed. Please try again.' }, 502);
-    }
-  }
-
-  if (typeof body.message !== 'string' || !body.message.trim() || body.message.length > 2000) {
-    return respond({ error: 'Message must contain 1 to 2000 characters.' }, 400);
-  }
-
-  const historyKey = `web-history:${sessionId}`;
-  let conversationHistory = [];
-  const savedHistory = await env.CHAT_HISTORY.get(historyKey);
-  if (savedHistory) {
-    try {
-      conversationHistory = JSON.parse(savedHistory);
-      if (!Array.isArray(conversationHistory) || conversationHistory.some(entry =>
-        !['user', 'model'].includes(entry?.role) ||
-        typeof entry.parts?.[0]?.text !== 'string'
-      )) {
-        throw new Error('Stored conversation has an invalid shape');
-      }
-    } catch (error) {
-      console.error('Could not load web chat memory:', error);
-      return respond({ error: 'Conversation memory could not be loaded.' }, 500);
-    }
-  }
-
-  conversationHistory = conversationHistory.slice(-18);
-  conversationHistory.push({
-    role: 'user',
-    parts: [{ text: `[Website visitor]: ${body.message.trim()}` }]
-  });
-
-  try {
-    const text = await generateGeminiContent(conversationHistory, env);
-    conversationHistory.push({ role: 'model', parts: [{ text }] });
-    await env.CHAT_HISTORY.put(historyKey, JSON.stringify(conversationHistory), {
-      expirationTtl: WEB_CHAT_SESSION_TTL_SECONDS
-    });
-    return respond({ text, sessionToken });
-  } catch (error) {
-    console.error('Web chat generation failed:', error);
-    return respond({ error: 'AstralyxAI could not answer right now. Please try again shortly.' }, 502);
-  }
-}
-
-async function createWebChatSession(sessionId, secret) {
-  const expiresAt = Date.now() + WEB_CHAT_SESSION_TTL_SECONDS * 1000;
-  const payload = `${sessionId}.${expiresAt}`;
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
-  const signatureHex = Array.from(new Uint8Array(signature), byte => byte.toString(16).padStart(2, '0')).join('');
-  return `${payload}.${signatureHex}`;
-}
-
-async function verifyWebChatSession(token, secret) {
-  if (typeof token !== 'string') return null;
-  const [sessionId, expiresAtValue, providedSignature, extra] = token.split('.');
-  const expiresAt = Number(expiresAtValue);
-  if (
-    extra !== undefined ||
-    !/^[0-9a-f-]{36}$/i.test(sessionId || '') ||
-    !Number.isSafeInteger(expiresAt) ||
-    expiresAt <= Date.now() ||
-    expiresAt > Date.now() + WEB_CHAT_SESSION_TTL_SECONDS * 1000 + 5000 ||
-    !/^[0-9a-f]{64}$/i.test(providedSignature || '')
-  ) {
-    return null;
-  }
-
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const expectedSignature = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    new TextEncoder().encode(`${sessionId}.${expiresAt}`)
-  );
-  const expectedHex = Array.from(new Uint8Array(expectedSignature), byte => byte.toString(16).padStart(2, '0')).join('');
-  let difference = 0;
-  for (let i = 0; i < expectedHex.length; i += 1) {
-    difference |= expectedHex.charCodeAt(i) ^ providedSignature.toLowerCase().charCodeAt(i);
-  }
-  return difference === 0 ? sessionId : null;
 }
 
 /**
