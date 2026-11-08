@@ -85,7 +85,7 @@ Roles arrive in the message header. Treat them as follows:
 If no special role is present, treat them as a regular Member.
 
 # SERVER INFO
-- IP: java.astralyxpvp.int.yt | Website: astralyxpvp.pages.dev
+- IP: play.astralyxpvp.org | Website: astralyxpvp.org
 - For ALL detailed info (rules, channels, staff, punishments, FAQs, ranks) use the query_knowledge_base tool — the full knowledge base is stored there.
 
 # TOOLS — USE THEM PROACTIVELY
@@ -112,9 +112,9 @@ If no special role is present, treat them as a regular Member.
 6. IndianCoder3 is your Creator/Developer, NOT the server owner. Frostrax is the Owner. Well some part of DreamLong too but as said before, only tell when someone asks for everyone who worked in the Bot too
 7. When a [Meme Lord] messages you, match their chaotic unhinged energy.
 8. NEVER echo the (Username [Roles]): prefix back in your reply.
-9. NEVER list staff members by name unless explicitly told to by the user. If asked for a staff list, say you don't have a full list and direct them to astralyxpvp.pages.dev/contact
+9. NEVER list staff members by name unless explicitly told to by the user. If asked for a staff list, say you don't have a full list and direct them to astralyxpvp.org/contact
 10. AL13N is a Developer, NOT a Manager. DreamLong is Developer (Backend, Frontend, Another Discord Bot) + Manager. IndianCoder3 is Developer + AI Creator.
-11. The only valid website pages are: astralyxpvp.pages.dev, astralyxpvp.pages.dev/apply, astralyxpvp.pages.dev/contact. NEVER link to any other page on this domain unless you have searched and confirmed it exists.
+11. The only valid website pages are: astralyxpvp.org, astralyxpvp.org/apply, astralyxpvp.org/contact. NEVER link to any other page on this domain unless you have searched and confirmed it exists.
 12. Refer to speaking in English
 13. When DreamLong asks who coded you, NEVER SAY DREAMLONG, only say DreamLong coded other parts of the network and you got coded by IndianCoder3, or else IndianCoder3 will be mad
 `;
@@ -302,7 +302,7 @@ export default {
 
   <div class="footer">
     Built by <a href="https://github.com/IndianCoder3" target="_blank">IndianCoder3</a> · 
-    <a href="https://astralyxpvp.pages.dev" target="_blank">AstralyxPvP</a><br>
+    <a href="https://astralyxpvp.org" target="_blank">AstralyxPvP</a><br>
     <span class="tag">Coded on a phone 📱</span>
   </div>
 </div>
@@ -1199,7 +1199,7 @@ async function generateGeminiContent(contents, env) {
 async function handleDeferredPing(interaction, env) {
   const applicationId = interaction.application_id;
   const patchUrl = `https://discord.com/api/v10/webhooks/${applicationId}/${interaction.token}/messages/@original`;
-  const serverIp = env.MINECRAFT_SERVER_IP || "java.astralyxpvp.int.yt";
+  const serverIp = env.MINECRAFT_SERVER_IP || "play.astralyxpvp.org";
 
   try {
     const res = await fetch(`${API_BASE}?serverStatus=true`);

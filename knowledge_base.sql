@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS kb (
 -- SERVER INFO
 -- =====================
 INSERT OR REPLACE INTO kb (category, key, value) VALUES
-('server', 'ip', 'java.astralyxpvp.int.yt'),
+('server', 'ip', 'play.astralyxpvp.org'),
 ('server', 'version', 'Minecraft Java Edition 1.9+'),
 ('server', 'region', 'India-based, optimized for ASIA region'),
 ('server', 'gamemodes', 'Sword FFA, Mace FFA, Netherite Pot FFA. Spear FFA coming soon.'),
@@ -22,8 +22,8 @@ INSERT OR REPLACE INTO kb (category, key, value) VALUES
 ('server', 'anticheat', 'Custom anti-cheat for balanced, fair, competitive play.'),
 ('server', 'ping', 'Hosted in India with optimized routes for low latency across ASIA.'),
 ('server', 'linking', 'In-game: /linkaccount → Then in Discord: /link <username> <code>'),
-('server', 'emails', 'All official emails use @astralyxpvp.int.yt (info@, frostrax@, indiancoder3@, dreamlong@, al13n@)'),
-('server', 'website', 'https://astralyxpvp.pages.dev'),
+('server', 'emails', 'All official emails use @astralyxpvp.org (info@, frostrax@, indiancoder3@, dreamlong@, al13n@)'),
+('server', 'website', 'https://astralyxpvp.org'),
 ('server', 'voting', 'Vote on Minecraft-Server-List, TopG, and Minecraft-MP. Earn coins, keys, cosmetics, and vote crate rewards. Maintain streaks for better rewards. If vote doesnt register, contact staff with proof.');
 
 -- =====================
@@ -39,14 +39,14 @@ INSERT OR REPLACE INTO kb (category, key, value) VALUES
 -- =====================
 INSERT OR REPLACE INTO kb (category, key, value) VALUES
 ('website', 'pages', 'Valid pages: / (home), /apply, /contact, /leaderboard, /rules, /store, /support, /vote, /status, /privacy, /terms, /astralyxai (web AI chat), /credits-web, /hallOfFame'),
-('website', 'apply', 'Staff applications: https://astralyxpvp.pages.dev/apply — then submit in Discord <#1477272661519368283>'),
-('website', 'contact', 'Contact page: https://astralyxpvp.pages.dev/contact'),
-('website', 'leaderboard', 'Live leaderboard: https://astralyxpvp.pages.dev/leaderboard'),
-('website', 'rules', 'Full rules: https://astralyxpvp.pages.dev/rules'),
-('website', 'store', 'Store/ranks: https://astralyxpvp.pages.dev/store'),
-('website', 'vote', 'Voting page: https://astralyxpvp.pages.dev/vote'),
-('website', 'status', 'Server status: https://astralyxpvp.pages.dev/status'),
-('website', 'astralyxai_web', 'AstralyxAI Web chat: https://astralyxpvp.pages.dev/astralyxai');
+('website', 'apply', 'Staff applications: https://astralyxpvp.org/apply — then submit in Discord <#1477272661519368283>'),
+('website', 'contact', 'Contact page: https://astralyxpvp.org/contact'),
+('website', 'leaderboard', 'Live leaderboard: https://astralyxpvp.org/leaderboard'),
+('website', 'rules', 'Full rules: https://astralyxpvp.org/rules'),
+('website', 'store', 'Store/ranks: https://astralyxpvp.org/store'),
+('website', 'vote', 'Voting page: https://astralyxpvp.org/vote'),
+('website', 'status', 'Server status: https://astralyxpvp.org/status'),
+('website', 'astralyxai_web', 'AstralyxAI Web chat: https://astralyxpvp.org/astralyxai');
 
 -- =====================
 -- DISCORD CHANNELS
@@ -86,7 +86,7 @@ INSERT OR REPLACE INTO kb (category, key, value) VALUES
 ('staff', 'sr_manager', 'Dravox (formerly known as Celestral, same person, Dravox is the current name) — Sr. Manager'),
 ('staff', 'manager', 'DreamLong — Manager AND Developer (Backend API, leaderboard, server status)'),
 ('staff', 'developers', 'IndianCoder3 (Web & AI Architect, Creator of AstralyxAI), AL13N (Developer), Jailbreaksix12345 (Developer), Random_Acc (Developer)'),
-('staff', 'note', 'Do not guess or list moderation staff below Developer level — this list changes frequently. Direct users to astralyxpvp.pages.dev/contact for full team info.');
+('staff', 'note', 'Do not guess or list moderation staff below Developer level — this list changes frequently. Direct users to astralyxpvp.org/contact for full team info.');
 
 -- =====================
 -- RULES & PUNISHMENTS
@@ -113,11 +113,11 @@ INSERT OR REPLACE INTO kb (category, key, value) VALUES
 -- FAQs
 -- =====================
 INSERT OR REPLACE INTO kb (category, key, value) VALUES
-('faq', 'how_to_join', 'Copy IP java.astralyxpvp.int.yt → Open Minecraft Java 1.9+ → Multiplayer → Add Server → Paste IP → Join. Cracked clients supported.'),
+('faq', 'how_to_join', 'Copy IP play.astralyxpvp.org → Open Minecraft Java 1.9+ → Multiplayer → Add Server → Paste IP → Join. Cracked clients supported.'),
 ('faq', 'cracked_support', 'Yes, AstralyxPvP fully supports cracked (non-premium) Minecraft clients. No account purchase needed.'),
 ('faq', 'how_to_appeal', 'Submit an appeal in <#1477042893574246502> or create a support ticket in <#1477032862892163113>.'),
 ('faq', 'how_to_report_bug', 'Report bugs in <#1477037371735281797>. You may receive a reward for valid bug reports.'),
 ('faq', 'how_to_get_rank', 'Astralyx+ is currently free — ask staff. YouTube rank requires an active channel making AstralyxPvP content — apply in <#1477272628149354697>.'),
 ('faq', 'vote_not_registering', 'If your vote did not register, contact staff in Discord with proof of your vote.'),
 ('faq', 'spear_ffa', 'Spear FFA is currently in development and will be added soon. Stay tuned in <#1477033205017346259>.'),
-('faq', 'how_to_apply_staff', 'Apply at https://astralyxpvp.pages.dev/apply and submit your application in <#1477272661519368283>.');
+('faq', 'how_to_apply_staff', 'Apply at https://astralyxpvp.org/apply and submit your application in <#1477272661519368283>.');
