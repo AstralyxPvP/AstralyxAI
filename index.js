@@ -8,7 +8,7 @@ import { verifyKey } from 'discord-interactions';
 // Target channel for automatic AI responses
 const AUTO_CHAT_CHANNEL_ID = "1507631887957627000";
 const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
-const API_BASE = "https://astralworker.chessmrbeaston.workers.dev/api/";
+const API_BASE = "https://api.astralyxpvp.workers.dev/api/";
 
 // Precise Role ID Hierarchy List (Highest to Lowest)
 const ROLE_HIERARCHY = [
