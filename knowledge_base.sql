@@ -22,7 +22,7 @@ INSERT OR REPLACE INTO kb (category, key, value) VALUES
 ('server', 'anticheat', 'Custom anti-cheat for balanced, fair, competitive play.'),
 ('server', 'ping', 'Hosted in India with optimized routes for low latency across ASIA.'),
 ('server', 'linking', 'In-game: /linkaccount → Then in Discord: /link <username> <code>'),
-('server', 'emails', 'All official emails use @astralyxpvp.org (info@, frostrax@, indiancoder3@, dreamlong@, al13n@)'),
+('server', 'emails', 'All official emails use @astralyxpvp.org (info@, frostrax@, indiancoder3@, dreamlong@)'),
 ('server', 'website', 'https://astralyxpvp.org'),
 ('server', 'voting', 'Vote on Minecraft-Server-List, TopG, and Minecraft-MP. Earn coins, keys, cosmetics, and vote crate rewards. Maintain streaks for better rewards. If vote doesnt register, contact staff with proof.');
 
@@ -85,7 +85,7 @@ INSERT OR REPLACE INTO kb (category, key, value) VALUES
 ('staff', 'chief_manager', '_IZylox_ — Chief Manager'),
 ('staff', 'sr_manager', 'Dravox (formerly known as Celestral, same person, Dravox is the current name) — Sr. Manager'),
 ('staff', 'manager', 'DreamLong — Manager AND Developer (Backend API, leaderboard, server status)'),
-('staff', 'developers', 'IndianCoder3 (Web & AI Architect, Creator of AstralyxAI), AL13N (Developer), Jailbreaksix12345 (Developer), Random_Acc (Developer)'),
+('staff', 'developers', 'IndianCoder3 (Web & AI Architect, Creator of AstralyxAI), Jailbreaksix12345 (Developer), Random_Acc (Developer)'),
 ('staff', 'note', 'Do not guess or list moderation staff below Developer level — this list changes frequently. Direct users to astralyxpvp.org/contact for full team info.');
 
 -- =====================
